@@ -49,7 +49,6 @@ DOCKER_IMAGE_TAG=v20261113 docker compose build
 docker images
 ```
 
-
-
-
+## (Optional) Download Maps data
+In the AZ server first startup, it will try to download maps data from github repo [client-data](https://github.com/wowgaming/client-data). To speed up the downloading, we can download the required zip file using any tools and extract the zip file content to Server Data Directory.
 
