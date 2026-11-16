@@ -5,8 +5,9 @@ usage() {
     cat <<EOF
 Usage: ${0##*/} [OPTIONS]
 
-Bootstrap the WotLK runtime (dirs, conf files, DB password) and print the
-environment needed to launch the server. Does NOT start the server itself.
+Bootstrap the WotLK runtime (dirs, conf files, DB password), then launch the
+stack with docker compose. --dry-run prints the environment and launch
+command instead of starting anything.
 
 Canonical layout (one base dir owns both pieces):
   <base-dir>/azerothcore-wotlk   clone of mod-playerbots/azerothcore-wotlk (Playerbot);
@@ -24,6 +25,7 @@ Options:
   --modules-dir <dir>        Bind-mount this host modules dir to ac-worldserver:/azerothcore/modules
                              (skipped entirely when the option is omitted)
   --refresh-conf             Overwrite runtime conf files with the repo's conf/ (repo wins)
+  --dry-run                  Print the env block + launch command, start nothing
   -h, --help                 Show this help and exit
 EOF
 }
@@ -36,6 +38,7 @@ DB_PASSWORD_FILE=""
 BASE_COMPOSE_FILE=""
 MODULES_DIR=""
 REFRESH_CONF=0
+DRY_RUN=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -55,6 +58,8 @@ while [ $# -gt 0 ]; do
             MODULES_DIR="$2"; shift 2 ;;
         --refresh-conf)
             REFRESH_CONF=1; shift ;;
+        --dry-run)
+            DRY_RUN=1; shift ;;
         -h|--help)
             usage; exit 0 ;;
         *)
@@ -200,7 +205,6 @@ if [ -n "${BASE_COMPOSE_FILE}" ]; then
 fi
 # Compose layering: clone's base file + this repo's override + the generated
 # modules file last (compose merges `volumes` additively by container path).
-# Exported as COMPOSE_FILE so bare `docker compose ps|attach|down` work too.
 COMPOSE_PROJECT_NAME="wotlk"
 COMPOSE_FILES="${BASE_COMPOSE_FILE:-${AZEROOTHCORE_DIR}/docker-compose.yml}"
 if [ -f "${CURRENT_DIR}/docker-compose.override.yml" ]; then
@@ -210,18 +214,41 @@ if [ -n "${MODULES_COMPOSE_FILE}" ]; then
     COMPOSE_FILES="${COMPOSE_FILES}:${MODULES_COMPOSE_FILE}"
     echo "Modules     : ${MODULES_DIR} -> ac-worldserver:/azerothcore/modules"
 fi
+
+if [ "${DRY_RUN}" -eq 1 ]; then
+    echo ""
+    echo "Dry run — would launch with:"
+    echo ""
+    echo "  export DOCKER_IMAGE_TAG=\"${DOCKER_IMAGE_TAG}\" \\"
+    echo "         DOCKER_AC_ENV_FILE=\"${DOCKER_AC_ENV_FILE}\" \\"
+    echo "         MYSQL_CNF=\"${MYSQL_CNF}\" \\"
+    echo "         DOCKER_VOL_DB=\"${DOCKER_VOL_DB}\" \\"
+    echo "         DOCKER_VOL_ETC=\"${DOCKER_VOL_ETC}\" \\"
+    echo "         DOCKER_VOL_LOGS=\"${DOCKER_VOL_LOGS}\" \\"
+    echo "         DOCKER_VOL_DATA=\"${DOCKER_VOL_DATA}\" \\"
+    echo "         DOCKER_DB_ROOT_PASSWORD=\"\$(cat ${DB_PASSWORD_FILE})\""
+    echo "  export COMPOSE_PROJECT_NAME=\"${COMPOSE_PROJECT_NAME}\" \\"
+    echo "         COMPOSE_FILE=\"${COMPOSE_FILES}\""
+    echo "  cd ${AZEROOTHCORE_DIR} && docker compose up -d"
+    exit 0
+fi
+
+# Export in this process only: inherited by the compose child, never printed.
+export COMPOSE_PROJECT_NAME COMPOSE_FILE="${COMPOSE_FILES}"
+
 echo ""
-echo "Run the server with:"
+echo "Launching '${COMPOSE_PROJECT_NAME}' stack from ${AZEROOTHCORE_DIR}..."
+cd "${AZEROOTHCORE_DIR}" || exit 1
+docker compose up -d
+STATUS=$?
+if [ "${STATUS}" -ne 0 ]; then
+    echo "docker compose up failed (exit ${STATUS})" >&2
+    exit "${STATUS}"
+fi
 echo ""
-echo "  export DOCKER_IMAGE_TAG=\"${DOCKER_IMAGE_TAG}\" \\"
-echo "         DOCKER_AC_ENV_FILE=\"${DOCKER_AC_ENV_FILE}\" \\"
-echo "         MYSQL_CNF=\"${MYSQL_CNF}\" \\"
-echo "         DOCKER_VOL_DB=\"${DOCKER_VOL_DB}\" \\"
-echo "         DOCKER_VOL_ETC=\"${DOCKER_VOL_ETC}\" \\"
-echo "         DOCKER_VOL_LOGS=\"${DOCKER_VOL_LOGS}\" \\"
-echo "         DOCKER_VOL_DATA=\"${DOCKER_VOL_DATA}\" \\"
-echo "         DOCKER_DB_ROOT_PASSWORD=\"\$(cat ${DB_PASSWORD_FILE})\""
-echo "  export COMPOSE_PROJECT_NAME=\"${COMPOSE_PROJECT_NAME}\" \\"
-echo "         COMPOSE_FILE=\"${COMPOSE_FILES}\""
-echo "  cd ${AZEROOTHCORE_DIR} && docker compose up -d"
+docker compose ps
+echo ""
+echo "  follow logs : docker compose logs -f ac-worldserver   # first boot: ac-db-import is slow, world/auth wait on it"
+echo "  RAS console : docker compose attach ac-worldserver    # detach: Ctrl-P then Ctrl-Q"
+echo "  stop        : bash ${CURRENT_DIR}/stop-server.sh      # add --down to also remove containers"
 exit 0
