@@ -8,11 +8,19 @@ Usage: ${0##*/} [OPTIONS]
 Bootstrap the WotLK runtime (dirs, conf files, DB password) and print the
 environment needed to launch the server. Does NOT start the server itself.
 
+Canonical layout (one base dir owns both pieces):
+  <base-dir>/azerothcore-wotlk   clone of mod-playerbots/azerothcore-wotlk (Playerbot);
+                                 its docker-compose.yml is the compose base file
+  <base-dir>/runtime             conf, db, data, logs, db.password
+
 Options:
-  --image-tag <tag>          Docker image tag                  (default: master)
-  --runtime-dir <dir>        Runtime directory                 (default: \$HOME/WotLK/runtime)
-  --db-password-file <file>  DB root password file             (default: <runtime-dir>/db.password)
-  --compose-file <file>      Own docker-compose file to use    (default: docker-compose.yml in this repo)
+  --base-dir <dir>           Base directory                      (default: \$HOME/WotLK or \$WOTLK_BASE_DIR)
+  --image-tag <tag>          Docker image tag                    (default: master)
+  --runtime-dir <dir>        Runtime directory                   (default: <base-dir>/runtime)
+  --azerothcore-dir <dir>    azerothcore-wotlk clone directory   (default: <base-dir>/azerothcore-wotlk)
+  --db-password-file <file>  DB root password file               (default: <runtime-dir>/db.password)
+  --compose-file <file>      Custom base compose file            (default: <azerothcore-dir>/docker-compose.yml;
+                               this repo's docker-compose.override.yml is still merged on top)
   --modules-dir <dir>        Bind-mount this host modules dir to ac-worldserver:/azerothcore/modules
                              (skipped entirely when the option is omitted)
   --refresh-conf             Overwrite runtime conf files with the repo's conf/ (repo wins)
@@ -21,9 +29,11 @@ EOF
 }
 
 DOCKER_IMAGE_TAG=""
+BASE_DIR=""
 RUNTIME_DIR=""
+AZEROOTHCORE_DIR=""
 DB_PASSWORD_FILE=""
-COMPOSE_FILE=""
+BASE_COMPOSE_FILE=""
 MODULES_DIR=""
 REFRESH_CONF=0
 
@@ -31,12 +41,16 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --image-tag)
             DOCKER_IMAGE_TAG="$2"; shift 2 ;;
+        --base-dir)
+            BASE_DIR="$2"; shift 2 ;;
         --runtime-dir)
             RUNTIME_DIR="$2"; shift 2 ;;
+        --azerothcore-dir)
+            AZEROOTHCORE_DIR="$2"; shift 2 ;;
         --db-password-file)
             DB_PASSWORD_FILE="$2"; shift 2 ;;
         --compose-file)
-            COMPOSE_FILE="$2"; shift 2 ;;
+            BASE_COMPOSE_FILE="$2"; shift 2 ;;
         --modules-dir)
             MODULES_DIR="$2"; shift 2 ;;
         --refresh-conf)
@@ -50,15 +64,15 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-if [ -n "${COMPOSE_FILE}" ]; then
-    if [ ! -f "${COMPOSE_FILE}" ]; then
-        echo "Compose file not found: ${COMPOSE_FILE}" >&2
+if [ -n "${BASE_COMPOSE_FILE}" ]; then
+    if [ ! -f "${BASE_COMPOSE_FILE}" ]; then
+        echo "Compose file not found: ${BASE_COMPOSE_FILE}" >&2
         exit 1
     fi
     # Normalize to an absolute path so the printed command works from any cwd
-    case "${COMPOSE_FILE}" in
+    case "${BASE_COMPOSE_FILE}" in
         /*) : ;;
-        *) COMPOSE_FILE="$(cd "$(dirname "${COMPOSE_FILE}")";pwd)/$(basename "${COMPOSE_FILE}")" ;;
+        *) BASE_COMPOSE_FILE="$(cd "$(dirname "${BASE_COMPOSE_FILE}")";pwd)/$(basename "${BASE_COMPOSE_FILE}")" ;;
     esac
 fi
 
@@ -74,9 +88,30 @@ if [ -n "${MODULES_DIR}" ]; then
 fi
 
 [ -n "${DOCKER_IMAGE_TAG}" ] || DOCKER_IMAGE_TAG="master"
-[ -n "${RUNTIME_DIR}" ]      || RUNTIME_DIR="$HOME/WotLK/runtime"
+# One base dir owns both the azerothcore clone and the runtime dir:
+#   <base-dir>/azerothcore-wotlk   <base-dir>/runtime
+# Explicit --runtime-dir / --azerothcore-dir still win over the derivation.
+[ -n "${BASE_DIR}" ] || BASE_DIR="${WOTLK_BASE_DIR:-$HOME/WotLK}"
+BASE_DIR="${BASE_DIR/#~/${HOME}}"
+case "${BASE_DIR}" in
+    /*) : ;;
+    *)  BASE_DIR="$(cd "$(dirname "${BASE_DIR}")" 2>/dev/null && pwd)/$(basename "${BASE_DIR}")" ;;
+esac
+[ -n "${RUNTIME_DIR}" ]      || RUNTIME_DIR="${BASE_DIR}/runtime"
 # Resolve after --runtime-dir so the default tracks a custom dir
 [ -n "${DB_PASSWORD_FILE}" ] || DB_PASSWORD_FILE="${RUNTIME_DIR}/db.password"
+[ -n "${AZEROOTHCORE_DIR}" ] || AZEROOTHCORE_DIR="${BASE_DIR}/azerothcore-wotlk"
+case "${AZEROOTHCORE_DIR}" in
+    /*) : ;;
+    *)  AZEROOTHCORE_DIR="$(cd "$(dirname "${AZEROOTHCORE_DIR}")" 2>/dev/null && pwd)/$(basename "${AZEROOTHCORE_DIR}")" ;;
+esac
+if [ ! -f "${AZEROOTHCORE_DIR}/docker-compose.yml" ]; then
+    echo "AzerothCore clone not found: ${AZEROOTHCORE_DIR}" >&2
+    echo "Clone it there (module setup in docs/server.md):" >&2
+    echo "  git clone https://github.com/mod-playerbots/azerothcore-wotlk --branch Playerbot --depth 1 ${AZEROOTHCORE_DIR}" >&2
+    echo "or point at an existing clone with --azerothcore-dir <dir>" >&2
+    exit 1
+fi
 
 if [ ! -d "${RUNTIME_DIR}" ];then
     echo "Ensure that the runtime folders exist..."
@@ -84,7 +119,7 @@ if [ ! -d "${RUNTIME_DIR}" ];then
 fi
 
 # Optional modules bind mount for ac-worldserver: generated only when
-# --modules-dir is given, and merged via a second `-f` (compose merges
+# --modules-dir is given, and appended last to COMPOSE_FILE (compose merges
 # `volumes` additively by container path). Omitted option => no mount at all.
 MODULES_COMPOSE_FILE=""
 if [ -n "${MODULES_DIR}" ]; then
@@ -155,19 +190,24 @@ fi
 export DOCKER_IMAGE_TAG DOCKER_VOL_DB DOCKER_VOL_ETC DOCKER_VOL_LOGS DOCKER_VOL_DATA DOCKER_DB_ROOT_PASSWORD
 
 echo ""
+echo "Base dir    : ${BASE_DIR}"
 echo "Runtime dir : ${RUNTIME_DIR}"
+echo "AzerothCore : ${AZEROOTHCORE_DIR}"
 echo "Image tag   : ${DOCKER_IMAGE_TAG}"
 echo "DB password : ${DB_PASSWORD_FILE}"
-if [ -n "${COMPOSE_FILE}" ]; then
-    echo "Compose file: ${COMPOSE_FILE}"
+if [ -n "${BASE_COMPOSE_FILE}" ]; then
+    echo "Base compose: ${BASE_COMPOSE_FILE}"
 fi
-COMPOSE_OPT=""
-if [ -n "${COMPOSE_FILE}" ] || [ -n "${MODULES_COMPOSE_FILE}" ]; then
-    # With two -f flags compose needs the base file spelled out explicitly
-    COMPOSE_OPT=" -f ${COMPOSE_FILE:-${CURRENT_DIR}/docker-compose.yml}"
+# Compose layering: clone's base file + this repo's override + the generated
+# modules file last (compose merges `volumes` additively by container path).
+# Exported as COMPOSE_FILE so bare `docker compose ps|attach|down` work too.
+COMPOSE_PROJECT_NAME="wotlk"
+COMPOSE_FILES="${BASE_COMPOSE_FILE:-${AZEROOTHCORE_DIR}/docker-compose.yml}"
+if [ -f "${CURRENT_DIR}/docker-compose.override.yml" ]; then
+    COMPOSE_FILES="${COMPOSE_FILES}:${CURRENT_DIR}/docker-compose.override.yml"
 fi
 if [ -n "${MODULES_COMPOSE_FILE}" ]; then
-    COMPOSE_OPT="${COMPOSE_OPT} -f ${MODULES_COMPOSE_FILE}"
+    COMPOSE_FILES="${COMPOSE_FILES}:${MODULES_COMPOSE_FILE}"
     echo "Modules     : ${MODULES_DIR} -> ac-worldserver:/azerothcore/modules"
 fi
 echo ""
@@ -181,5 +221,7 @@ echo "         DOCKER_VOL_ETC=\"${DOCKER_VOL_ETC}\" \\"
 echo "         DOCKER_VOL_LOGS=\"${DOCKER_VOL_LOGS}\" \\"
 echo "         DOCKER_VOL_DATA=\"${DOCKER_VOL_DATA}\" \\"
 echo "         DOCKER_DB_ROOT_PASSWORD=\"\$(cat ${DB_PASSWORD_FILE})\""
-echo "  cd ${CURRENT_DIR} && docker compose${COMPOSE_OPT} up -d"
+echo "  export COMPOSE_PROJECT_NAME=\"${COMPOSE_PROJECT_NAME}\" \\"
+echo "         COMPOSE_FILE=\"${COMPOSE_FILES}\""
+echo "  cd ${AZEROOTHCORE_DIR} && docker compose up -d"
 exit 0

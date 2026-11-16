@@ -1,0 +1,37 @@
+# docker-compose.override.yml — this repo's local customizations.
+#
+# The base service definitions live in the azerothcore-wotlk clone's own
+# docker-compose.yml (fork Playerbot branch). Compose merges this file over
+# that base: maps (mem_limit, ...) are patched, volume lists are appended.
+# Keep this file to pure deltas — never restate base config here.
+#
+# start-server.sh prints the launch command; in short:
+#   cd <base-dir>/azerothcore-wotlk
+#   docker compose up -d   # with COMPOSE_FILE / COMPOSE_PROJECT_NAME exported
+
+services:
+  ac-database:
+    volumes:
+      # start-server.sh exports MYSQL_CNF as an absolute runtime path;
+      # the relative default below resolves against this file's repo dir.
+      - ${MYSQL_CNF:-./conf/mysql.cnf}:/etc/mysql/conf.d/custom.cnf:ro
+    # Host runs a local LLM (~100G); WoW server budget is ~20G total.
+    # Must exceed innodb_buffer_pool_size (4G in mysql.cnf) + MySQL overhead.
+    mem_limit: ${DOCKER_DB_MEM_LIMIT:-6g}
+
+  ac-db-import:
+    mem_limit: ${DOCKER_DBIMPORT_MEM_LIMIT:-1g}
+
+  ac-worldserver:
+    # Sized for 10 players + 50+ playerbots.
+    mem_limit: ${DOCKER_WORLD_MEM_LIMIT:-8g}
+
+  ac-authserver:
+    mem_limit: ${DOCKER_AUTH_MEM_LIMIT:-512m}
+
+  ac-client-data-init:
+    mem_limit: ${DOCKER_CLIENTDATA_MEM_LIMIT:-256m}
+
+  ac-tools:
+    # vmap/mmap extractors are RAM-hungry; run this profile while the LLM is unloaded.
+    mem_limit: ${DOCKER_TOOLS_MEM_LIMIT:-4g}
