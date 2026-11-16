@@ -138,7 +138,7 @@ for how the model and flags were tuned on the Strix Halo) and wires
 mod-ollama-chat to it over the compose network — no host port needed.
 
 ```bash
-# RAM: ac-llm caps at 64G and REPLACES the manual ~100G LLM. Stop that one first.
+# RAM: ac-llm caps at 32G and REPLACES the manual ~100G LLM. Stop that one first.
 bash start-server.sh --with-llm
 ```
 
@@ -170,5 +170,5 @@ docker compose logs -f ac-llm
 ```
 
 Worldserver logs `> Config: Found config value 'OllamaChat.Url' from environment
-variable 'AC_OLLAMACHAT_URL'` at boot when the wiring is active. `stop-server.sh`
+variable 'AC_OLLAMA_CHAT_URL'` at boot when the wiring is active. `stop-server.sh`
 always includes the LLM layer, so `stop`/`--down` also reap `ac-llm`.

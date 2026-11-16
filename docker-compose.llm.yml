@@ -75,8 +75,8 @@ services:
     # split into _UPPER. So the module is on only when this layer is loaded;
     # conf/modules/mod_ollama_chat.conf stays at its safe Enable = 0 default.
     environment:
-      AC_OLLAMACHAT_ENABLE: "${OLLAMA_CHAT_ENABLE:-1}"
-      AC_OLLAMACHAT_PROVIDER: "${OLLAMA_CHAT_PROVIDER:-openai}"
-      AC_OLLAMACHAT_URL: "${OLLAMA_CHAT_URL:-http://ac-llm:8080/v1/chat/completions}"
-      AC_OLLAMACHAT_MODEL: "${OLLAMA_CHAT_MODEL:-Qwen3.6-35B-A3B}"
-      AC_OLLAMACHAT_MAX_CONCURRENT_QUERIES: "${OLLAMA_CHAT_MAX_CONCURRENCY:-1}"
+      AC_OLLAMA_CHAT_ENABLE: "${OLLAMA_CHAT_ENABLE:-1}"
+      AC_OLLAMA_CHAT_PROVIDER: "${OLLAMA_CHAT_PROVIDER:-openai}"
+      AC_OLLAMA_CHAT_URL: "${OLLAMA_CHAT_URL:-http://ac-llm:8080/v1/chat/completions}"
+      AC_OLLAMA_CHAT_MODEL: "${OLLAMA_CHAT_MODEL:-Qwen3.6-35B-A3B}"
+      AC_OLLAMA_CHAT_MAX_CONCURRENT_QUERIES: "${OLLAMA_CHAT_MAX_CONCURRENCY:-1}"

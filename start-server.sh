@@ -222,7 +222,7 @@ if [ "${WITH_LLM}" -eq 1 ]; then
         exit 1
     fi
     COMPOSE_FILES="${COMPOSE_FILES}:${CURRENT_DIR}/docker-compose.llm.yml"
-    echo "LLM         : ac-llm started, mod-ollama-chat enabled (AC_OLLAMACHAT_* env)"
+    echo "LLM         : ac-llm started, mod-ollama-chat enabled (AC_OLLAMA_CHAT_* env)"
 fi
 if [ -n "${MODULES_COMPOSE_FILE}" ]; then
     COMPOSE_FILES="${COMPOSE_FILES}:${MODULES_COMPOSE_FILE}"
