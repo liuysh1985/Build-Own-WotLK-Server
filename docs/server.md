@@ -138,7 +138,7 @@ for how the model and flags were tuned on the Strix Halo) and wires
 mod-ollama-chat to it over the compose network — no host port needed.
 
 ```bash
-# RAM: ac-llm caps at 32G and REPLACES the manual ~100G LLM. Stop that one first.
+# RAM: ac-llm caps at 48G and REPLACES the manual ~100G LLM. Stop that one first.
 bash start-server.sh --with-llm
 ```
 
@@ -158,6 +158,12 @@ All are host-env tunables (export before `start-server.sh`). Without
 `--with-llm` nothing is set and the module stays disabled per
 `conf/modules/mod_ollama_chat.conf` (`OllamaChat.Enable = 0`). Tune the other
 module options (personality, RAG, say channels…) conf-side as usual.
+
+The layer also silences the playerbots module's canned chatter — bots have a
+real LLM voice now — by pinning `Playerbots.EnableBroadcasts`, `.RandomBotTalk`,
+`.RandomBotEmote`, `.RandomBotSuggestDungeons`, `.EnableGreet` and
+`.RandomBotSayWithoutMaster` to 0 via `AC_PLAYERBOTS_*` env vars (deliberate
+bundle, not host-env tunables; note this fork's keys are `Playerbots.*`, plural).
 
 ```bash
 # Smoke test the model endpoint (host debug port; 8080 belongs to other LLM servers)

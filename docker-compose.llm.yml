@@ -7,8 +7,8 @@
 # Appended to COMPOSE_FILE by `start-server.sh --with-llm`; stop-server.sh
 # always includes it so `stop`/`down` also reap ac-llm.
 #
-# RAM: ac-llm caps at 64G and REPLACES the manual ~100G LLM — unload that one
-# first (64G llama + ~20G WoW fits the host budget, both LLMs at once don't).
+# RAM: ac-llm caps at 48G and REPLACES the manual ~100G LLM — unload that one
+# first (48G llama + ~20G WoW fits the host budget, both LLMs at once don't).
 # Model/flag tuning reference:
 # https://github.com/liuysh1985/ai-pc-practice (local-llm-servers.md, llama.cpp)
 #
@@ -32,8 +32,8 @@ services:
       - ${LLM_MODELS_DIR:-${HOME}/LLM_Practice/models/qwen36-35b-a3b}:/models:ro
     ports:
       - "${DOCKER_LLM_EXTERNAL_PORT:-8090}:8080"
-    mem_limit: ${DOCKER_LLM_MEM_LIMIT:-32g}
-    memswap_limit: ${DOCKER_LLM_MEM_LIMIT:-32g}
+    mem_limit: ${DOCKER_LLM_MEM_LIMIT:-48g}
+    memswap_limit: ${DOCKER_LLM_MEM_LIMIT:-48g}
     command:
       - -m
       - /models/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf
@@ -80,3 +80,12 @@ services:
       AC_OLLAMA_CHAT_URL: "${OLLAMA_CHAT_URL:-http://ac-llm:8080/v1/chat/completions}"
       AC_OLLAMA_CHAT_MODEL: "${OLLAMA_CHAT_MODEL:-Qwen3.6-35B-A3B}"
       AC_OLLAMA_CHAT_MAX_CONCURRENT_QUERIES: "${OLLAMA_CHAT_MAX_CONCURRENCY:-1}"
+      # With a real LLM voicing the bots, silence the module's canned chatter.
+      # Literal 0 (not host-env tunables): this bundle is deliberate, and the
+      # env vars pin it even if the runtime playerbots.conf drifts.
+      AC_PLAYERBOTS_ENABLE_BROADCASTS: "0"
+      AC_PLAYERBOTS_RANDOM_BOT_TALK: "0"
+      AC_PLAYERBOTS_RANDOM_BOT_EMOTE: "0"
+      AC_PLAYERBOTS_RANDOM_BOT_SUGGEST_DUNGEONS: "0"
+      AC_PLAYERBOTS_ENABLE_GREET: "0"
+      AC_PLAYERBOTS_RANDOM_BOT_SAY_WITHOUT_MASTER: "0"
