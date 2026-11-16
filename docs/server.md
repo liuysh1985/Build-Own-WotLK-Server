@@ -127,3 +127,48 @@ account create ACCOUNT_NAME PASSWORD EMAIL
 account set addon ACCOUNT_NAME 2
 account set gmlevel ACCOUNT_NAME 3 -1
 ```
+
+## (Optional) Bot AI model (llama.cpp + mod-ollama-chat)
+
+Give bots (and any chat channel using the module) answers from a local LLM. The
+optional compose layer `docker-compose.llm.yml` runs Qwen3.6-35B-A3B in a
+llama.cpp Vulkan container (`ac-llm`, see the llama.cpp section of
+[ai-pc-practice/local-llm-servers.md](https://github.com/liuysh1985/ai-pc-practice)
+for how the model and flags were tuned on the Strix Halo) and wires
+mod-ollama-chat to it over the compose network — no host port needed.
+
+```bash
+# RAM: ac-llm caps at 64G and REPLACES the manual ~100G LLM. Stop that one first.
+bash start-server.sh --with-llm
+```
+
+How it works: any worldserver conf option can be overridden by an env var named
+`AC_<OPTION_NAME>` (prefix `AC_`, dots to `_`, camelCase split to `_UPPER`), and
+the env var wins over the conf file. The layer sets exactly:
+
+| Env var | Default | Conf option |
+|---|---|---|
+| `OLLAMA_CHAT_ENABLE` | `1` | `OllamaChat.Enable` |
+| `OLLAMA_CHAT_PROVIDER` | `openai` | `OllamaChat.Provider` (llama.cpp speaks OpenAI API) |
+| `OLLAMA_CHAT_URL` | `http://ac-llm:8080/v1/chat/completions` | `OllamaChat.Url` |
+| `OLLAMA_CHAT_MODEL` | `Qwen3.6-35B-A3B` | `OllamaChat.Model` (the `--alias`) |
+| `OLLAMA_CHAT_MAX_CONCURRENCY` | `1` | `OllamaChat.MaxConcurrentQueries` (single llama slot) |
+
+All are host-env tunables (export before `start-server.sh`). Without
+`--with-llm` nothing is set and the module stays disabled per
+`conf/modules/mod_ollama_chat.conf` (`OllamaChat.Enable = 0`). Tune the other
+module options (personality, RAG, say channels…) conf-side as usual.
+
+```bash
+# Smoke test the model endpoint (host debug port; 8080 belongs to other LLM servers)
+curl -s http://localhost:8090/v1/chat/completions \
+  -d '{"model":"Qwen3.6-35B-A3B","messages":[{"role":"user","content":"Hello"}]}' \
+  | head -c 400
+
+# The model takes a while to load 35B weights; watch for "server is listening":
+docker compose logs -f ac-llm
+```
+
+Worldserver logs `> Config: Found config value 'OllamaChat.Url' from environment
+variable 'AC_OLLAMACHAT_URL'` at boot when the wiring is active. `stop-server.sh`
+always includes the LLM layer, so `stop`/`--down` also reap `ac-llm`.

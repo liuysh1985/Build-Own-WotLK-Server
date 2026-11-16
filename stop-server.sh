@@ -80,14 +80,19 @@ if [ ! -f "${AZ_BASE_COMPOSE}" ]; then
 fi
 
 # Same layering as start-server.sh (stop needs no password or runtime conf).
-# A leftover generated modules file from a --modules-dir launch is included
-# when present at the default runtime path; it is volumes-only, so a custom
-# --runtime-dir missing it is equally fine.
+# The LLM layer is always included when present so stop/down also reap ac-llm
+# even if the stack was launched without --with-llm awareness; a stack
+# without ac-llm simply ignores it. A leftover generated modules file from a
+# --modules-dir launch is included when present at the default runtime path;
+# it is volumes-only, so a custom --runtime-dir missing it is equally fine.
 RUNTIME_DIR="${BASE_DIR}/runtime"
 COMPOSE_PROJECT_NAME="wotlk"
 COMPOSE_FILES="${AZ_BASE_COMPOSE}"
 if [ -f "${CURRENT_DIR}/docker-compose.override.yml" ]; then
     COMPOSE_FILES="${COMPOSE_FILES}:${CURRENT_DIR}/docker-compose.override.yml"
+fi
+if [ -f "${CURRENT_DIR}/docker-compose.llm.yml" ]; then
+    COMPOSE_FILES="${COMPOSE_FILES}:${CURRENT_DIR}/docker-compose.llm.yml"
 fi
 if [ -f "${RUNTIME_DIR}/docker-compose.modules.yml" ]; then
     COMPOSE_FILES="${COMPOSE_FILES}:${RUNTIME_DIR}/docker-compose.modules.yml"

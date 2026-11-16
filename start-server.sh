@@ -24,6 +24,8 @@ Options:
                                this repo's docker-compose.override.yml is still merged on top)
   --modules-dir <dir>        Bind-mount this host modules dir to ac-worldserver:/azerothcore/modules
                              (skipped entirely when the option is omitted)
+  --with-llm                 Also start ac-llm (Qwen3.6-35B-A3B, llama.cpp) and enable
+                             mod-ollama-chat via docker-compose.llm.yml (off by default)
   --refresh-conf             Overwrite runtime conf files with the repo's conf/ (repo wins)
   --dry-run                  Print the env block + launch command, start nothing
   -h, --help                 Show this help and exit
@@ -37,6 +39,7 @@ AZEROOTHCORE_DIR=""
 DB_PASSWORD_FILE=""
 BASE_COMPOSE_FILE=""
 MODULES_DIR=""
+WITH_LLM=0
 REFRESH_CONF=0
 DRY_RUN=0
 
@@ -56,6 +59,8 @@ while [ $# -gt 0 ]; do
             BASE_COMPOSE_FILE="$2"; shift 2 ;;
         --modules-dir)
             MODULES_DIR="$2"; shift 2 ;;
+        --with-llm)
+            WITH_LLM=1; shift ;;
         --refresh-conf)
             REFRESH_CONF=1; shift ;;
         --dry-run)
@@ -203,12 +208,21 @@ echo "DB password : ${DB_PASSWORD_FILE}"
 if [ -n "${BASE_COMPOSE_FILE}" ]; then
     echo "Base compose: ${BASE_COMPOSE_FILE}"
 fi
-# Compose layering: clone's base file + this repo's override + the generated
-# modules file last (compose merges `volumes` additively by container path).
+# Compose layering: clone's base file + this repo's override + the optional
+# LLM layer + the generated modules file last (compose merges `volumes`
+# additively by container path).
 COMPOSE_PROJECT_NAME="wotlk"
 COMPOSE_FILES="${BASE_COMPOSE_FILE:-${AZEROOTHCORE_DIR}/docker-compose.yml}"
 if [ -f "${CURRENT_DIR}/docker-compose.override.yml" ]; then
     COMPOSE_FILES="${COMPOSE_FILES}:${CURRENT_DIR}/docker-compose.override.yml"
+fi
+if [ "${WITH_LLM}" -eq 1 ]; then
+    if [ ! -f "${CURRENT_DIR}/docker-compose.llm.yml" ]; then
+        echo "LLM compose layer not found: ${CURRENT_DIR}/docker-compose.llm.yml" >&2
+        exit 1
+    fi
+    COMPOSE_FILES="${COMPOSE_FILES}:${CURRENT_DIR}/docker-compose.llm.yml"
+    echo "LLM         : ac-llm started, mod-ollama-chat enabled (AC_OLLAMACHAT_* env)"
 fi
 if [ -n "${MODULES_COMPOSE_FILE}" ]; then
     COMPOSE_FILES="${COMPOSE_FILES}:${MODULES_COMPOSE_FILE}"
