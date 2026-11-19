@@ -25,6 +25,12 @@ services:
   ac-worldserver:
     # Sized for 10 players + 50+ playerbots.
     mem_limit: ${DOCKER_WORLD_MEM_LIMIT:-8g}
+    environment:
+      AC_RATE_XP_KILL: "1.5"
+      AC_RATE_XP_QUEST: "2"
+      AC_RATE_XP_QUEST_DF: "2"
+      AC_RATE_XP_EXPLORE: "5"
+      AC_RATE_XP_PET: "5"
 
   ac-authserver:
     mem_limit: ${DOCKER_AUTH_MEM_LIMIT:-512m}
