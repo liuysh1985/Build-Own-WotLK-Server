@@ -78,6 +78,15 @@ set realmlist SERVER_IP
 ### Linux
 Wine, Proton
 
+#### (Optional) Locale `zh_CN` setup
+```bash
+# Verified in ubuntu 26.04
+sudo locale-gen zh_CN.UTF-8
+```
+
+Add `LC_ALL=zh_CN.UTF-8` and `LANG=zh_CN.UTF-8` into System Environment Variables for Wine
+
+
 ### Windows
 Native Support
 
