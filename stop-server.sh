@@ -82,9 +82,9 @@ fi
 # Same layering as start-server.sh (stop needs no password or runtime conf).
 # The LLM layer is always included when present so stop/down also reap ac-llm
 # even if the stack was launched without --with-llm awareness; a stack
-# without ac-llm simply ignores it. A leftover generated modules file from a
-# --modules-dir launch is included when present at the default runtime path;
-# it is volumes-only, so a custom --runtime-dir missing it is equally fine.
+# without ac-llm simply ignores it. The generated modules file (start-server.sh
+# always writes it) is included when present at the default runtime path; it
+# is volumes-only, so a custom --runtime-dir missing it is equally fine.
 RUNTIME_DIR="${BASE_DIR}/runtime"
 COMPOSE_PROJECT_NAME="wotlk"
 COMPOSE_FILES="${AZ_BASE_COMPOSE}"
